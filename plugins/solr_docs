@@ -27,32 +27,56 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 #
-# Single core
+# Multi Core
 # Monitors the number of documents on the core.
 #
 
 import httplib, sys
 from lxml import etree
+import os,re
+
+hostport  = 'localhost:8080'
+try:
+	if os.environ['hostport']:
+		hostport = os.environ['hostport']
+except:
+	pass
+
+cores = ['__SINGLE_CORE__']
+try:
+	if os.environ['cores']:
+		cores = re.split(r'\s+', os.environ['cores'])
+except:
+	pass
 
 if sys.argv[-1] == 'config':
 	print "graph_title Solr Docs"
 	print "graph_vlabel docs"
-	print "docs.label Docs"
 	print "graph_category search"
+	for core in cores:
+                if core == '__SINGLE_CORE__':
+                        core = ''
+		print "%s_docs.label %s Docs" % (core, core)
 else:
-	conn = httplib.HTTPConnection("localhost:8080")
-	conn.request("GET", "/solr/admin/stats.jsp")
-	res = conn.getresponse()
+	conn = httplib.HTTPConnection( hostport )
+	for core in cores:
+                if core == '__SINGLE_CORE__':
+                        core = coredir = '' 
+                else:
+                	coredir = "/%s" % core
+                path = "/solr%s/admin/stats.jsp" % coredir
+		conn.request("GET", path)
+		res = conn.getresponse()
 
-	if res.status == 200:
-		data = res.read()
+		if res.status == 200:
+			data = res.read()
 
-		root = etree.fromstring(data)
-		core = root.xpath('/solr/solr-info/CORE')
+			root = etree.fromstring(data)
+			elements = root.xpath('/solr/solr-info/CORE')
 
-		for entry in core[0].xpath('entry'):
-			if entry[0].text.strip() == 'searcher':
-				stats = entry.xpath('stats')
-				for stat in stats[0]:
-					if stat.get("name") in ["numDocs"]:
-						print "docs.value", stat.text.strip()
+			for entry in elements[0].xpath('entry'):
+				if entry[0].text.strip() == 'searcher':
+					stats = entry.xpath('stats')
+					for stat in stats[0]:
+						if stat.get("name") in ["numDocs"]:
+							print "%s_docs.value %s" % (core, stat.text.strip())

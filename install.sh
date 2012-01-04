@@ -5,7 +5,11 @@ if [ "$(id -u)" != "0" ]; then
 fi
 
 echo "install lxml"
-apt-get --assume-yes --quiet install python-lxml
+if [[ $(rpm -qa yum) ]] ; then
+  echo "yum -y install python-lxml"
+else
+  echo "apt-get --assume-yes --quiet install python-lxml"
+fi
 echo "done"
 echo "chmod"
 chmod +x plugins/solr_*
@@ -24,6 +28,7 @@ ln -s /usr/share/munin/plugins/solr_qps /etc/munin/plugins/solr_qps
 ln -s /usr/share/munin/plugins/solr_querycache /etc/munin/plugins/solr_querycache
 ln -s /usr/share/munin/plugins/solr_querytime /etc/munin/plugins/solr_querytime
 ln -s /usr/share/munin/plugins/solr_updates /etc/munin/plugins/solr_updates
+ln -s /usr/share/munin/plugins/solr_updatetime /etc/munin/plugins/solr_updatetime
 echo "done"
 echo "restart munin-node"
 /etc/init.d/munin-node restart
@@ -48,6 +53,9 @@ echo "/etc/munin/plugins/solr_querytime"
 echo
 echo "/etc/munin/plugins/solr_updates"
 /etc/munin/plugins/solr_updates
+echo
+echo "/etc/munin/plugins/solr_updatetime"
+/etc/munin/plugins/solr_updatetime
 echo
 echo "it works!"
 exit 0

@@ -32,27 +32,56 @@
 
 import httplib, sys
 from lxml import etree
+import os,re
+
+hostport  = 'localhost:8080'
+try:
+	if os.environ['hostport']:
+		hostport = os.environ['hostport']
+except:
+	pass
+
+cores = ['__SINGLE_CORE__']
+try:
+	if os.environ['cores']:
+		cores = re.split(r'\s+', os.environ['cores'])
+except:
+	pass
 
 if sys.argv[-1] == 'config':
-	print "graph_title Solr Queries per second"
+	print "graph_title Solr Search / Requests Per Second"
 	print "graph_args -l 0"
+        print "graph_scale no"
 	print "graph_vlabel qps"
 	print "graph_category search"
-	print "qps.label Queries per second"
+	for core in cores:
+                if core == '__SINGLE_CORE__':
+                        core = ''
+		print "%s_avg_qps.label %s Avg Requests Per Second" % (core, core)
+		print "%s_qps.label %s Requests per second" % (core, core)
+		print "%s_qps.type COUNTER" % core
 else:
-	conn = httplib.HTTPConnection("localhost:8080")
-	conn.request("GET", "/solr/admin/stats.jsp")
-	res = conn.getresponse()
+	conn = httplib.HTTPConnection( hostport )
+	for core in cores:
+                if core == '__SINGLE_CORE__':
+                        core = coredir = '' 
+                else:
+                	coredir = "/%s" % core
+                path = "/solr%s/admin/stats.jsp" % coredir
+		conn.request("GET", path)
+		res = conn.getresponse()
 
-	if res.status == 200:
-		data = res.read()
+		if res.status == 200:
+			data = res.read()
 
-		root = etree.fromstring(data)
-		core = root.xpath('/solr/solr-info/QUERYHANDLER')
+			root = etree.fromstring(data)
+			elements = root.xpath('/solr/solr-info/QUERYHANDLER')
 
-		for entry in core[0].xpath('entry'):
-			if entry[0].text.strip() == 'standard':
-				stats = entry.xpath('stats')
-				for stat in stats[0]:
-					if stat.get('name') == 'avgRequestsPerSecond':
-						print 'qps' + '.value', stat.text.strip()
+			for entry in elements[0].xpath('entry'):
+				if entry[0].text.strip() == 'search':
+					stats = entry.xpath('stats')
+					for stat in stats[0]:
+						if stat.get('name') == 'avgRequestsPerSecond':
+							print "%s_avg_qps.value %s" % (core, stat.text.strip())
+						if stat.get('name') == 'requests':
+							print "%s_qps.value %s" % (core, stat.text.strip())
