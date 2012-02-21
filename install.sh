@@ -7,8 +7,10 @@ fi
 echo "install lxml"
 if [[ $(rpm -qa yum) ]] ; then
   echo "yum -y install python-lxml"
+  yum -y install python-lxml
 else
   echo "apt-get --assume-yes --quiet install python-lxml"
+  apt-get --assume-yes --quiet install python-lxml
 fi
 echo "done"
 echo "chmod"
