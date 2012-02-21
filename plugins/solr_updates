@@ -45,6 +45,11 @@ cores = ['__SINGLE_CORE__']
 try:
 	if os.environ['cores']:
 		cores = re.split(r'\s+', os.environ['cores'])
+	p = re.compile( 'solr_\w+(?<=_)' )
+	filename = os.path.basename(__file__)
+	core = p.sub('', filename)
+	if core != filename:
+        	cores = [ core ]
 except:
 	pass
 

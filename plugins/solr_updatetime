@@ -45,6 +45,11 @@ cores = ['__SINGLE_CORE__']
 try:
 	if os.environ['cores']:
 		cores = re.split(r'\s+', os.environ['cores'])
+	p = re.compile( 'solr_\w+(?<=_)' )
+	filename = os.path.basename(__file__)
+	core = p.sub('', filename)
+	if core != filename:
+        	cores = [ core ]
 except:
 	pass
 
@@ -56,7 +61,7 @@ if sys.argv[-1] == 'config':
 	for core in cores:
                 if core == '__SINGLE_CORE__':
                         core = ''
-		print "%s_avg_uptime.label %s Avg Time Per Request (msec)'" % (core, core)
+		print "%s_avg_uptime.label %s Avg Time Per Request (msec)" % (core, core)
 		print "%s_uptime.label %s Time Per Request (msec)" % (core, core)
 		print "%s_uptime.type COUNTER" % core
 else:
