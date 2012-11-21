@@ -29,63 +29,74 @@
 #
 # Monitors the average time per request
 #
-
 import httplib, sys
 from lxml import etree
 import os,re
+import traceback
 
-hostport  = 'localhost:8080'
-try:
-	if os.environ['hostport']:
-		hostport = os.environ['hostport']
-except:
-	pass
+DEBUG = os.getenv("DEBUG")
+if DEBUG: DEBUG = int(DEBUG)
+
+hostport = 'localhost:8080'
+if os.getenv("hostport"):
+        hostport = os.getenv("hostport")
+
+contextpath = '/solr'
+if os.getenv("contextpath"):
+        contextpath = os.getenv("contextpath")
 
 cores = ['__SINGLE_CORE__']
+if os.getenv('cores'):
+        cores = re.split(r'\s+', os.getenv('cores'))
+p = re.compile( 'solr_\w+(?<=_)' )
+filename = os.path.basename(__file__)
+core = p.sub('', filename)
+if core and core != filename:
+       	cores = [ core ]
+
 try:
-	if os.environ['cores']:
-		cores = re.split(r'\s+', os.environ['cores'])
-	p = re.compile( 'solr_\w+(?<=_)' )
-	filename = os.path.basename(__file__)
-	core = p.sub('', filename)
-	if core != filename:
-        	cores = [ core ]
-except:
-	pass
+	if sys.argv[-1] == 'config':
+		print "graph_title Solr Updates / Time Per Request (%s)" % contextpath
+		print "graph_args -l 0"
+		print "graph_vlabel milliseconds response time"
+		print "graph_category search"
+		for core in cores:
+	                if core == '__SINGLE_CORE__':
+	                        core = ''
+			print "%s_avg_uptime.label %s Avg Time Per Request (msec)" % (core, core)
+			print "%s_uptime.label %s Time Per Request (msec)" % (core, core)
+			print "%s_uptime.type COUNTER" % core
 
-if sys.argv[-1] == 'config':
-	print "graph_title Solr Updates / Time Per Request"
-	print "graph_args -l 0"
-	print "graph_vlabel milliseconds response time"
-	print "graph_category search"
-	for core in cores:
-                if core == '__SINGLE_CORE__':
-                        core = ''
-		print "%s_avg_uptime.label %s Avg Time Per Request (msec)" % (core, core)
-		print "%s_uptime.label %s Time Per Request (msec)" % (core, core)
-		print "%s_uptime.type COUNTER" % core
-else:
-	conn = httplib.HTTPConnection( hostport )
-	for core in cores:
-                if core == '__SINGLE_CORE__':
-                        core = coredir = '' 
-                else:
-                	coredir = "/%s" % core
-                path = "/solr%s/admin/stats.jsp" % coredir
-		conn.request("GET", path)
-		res = conn.getresponse()
-
-		if res.status == 200:
-			data = res.read()
-
-			root = etree.fromstring(data)
-			elements = root.xpath('/solr/solr-info/QUERYHANDLER')
+	else:
+		conn = httplib.HTTPConnection( hostport )
+		for core in cores:
+	                if core == '__SINGLE_CORE__':
+	                        core = coredir = '' 
+	                else:
+	                	coredir = "/%s" % core
+	                path = "%s%s/admin/mbeans?stats=true" % (contextpath, coredir)
+			conn.request("GET", path)
+			res = conn.getresponse()
 	
-			for entry in elements[0].xpath('entry'):
-				if entry[0].text.strip() == '/update':
-					stats = entry.xpath('stats')
-					for stat in stats[0]:
-						if stat.get('name') == 'avgTimePerRequest':
-							print "%s_avg_uptime.value %s" % (core, stat.text.strip())
-						if stat.get('name') == 'totalTime':
-							print "%s_uptime.value %s" % (core, stat.text.strip())
+			if res.status == 200:
+				data = res.read()
+	                        if DEBUG >= 3: print data
+
+				root = etree.fromstring(data)
+
+				xmlpash  = '/response'
+				xmlpash += '/lst[@name="solr-mbeans"]'
+				xmlpash += '/lst[@name="QUERYHANDLER"]'
+				xmlpash += '/lst[@name="/update"]'
+				xmlpash += '/lst[@name="stats"]'
+
+				stats = root.xpath(xmlpash)
+			
+				for stat in stats[0]:
+				    if stat.get('name') == 'avgTimePerRequest':
+				        print "%s_avg_uptime.value %s" % (core, stat.text)
+				    if stat.get('name') == 'totalTime':
+			 	        print "%s_uptime.value %s" % (core, stat.text)
+		
+except:
+	if DEBUG: traceback.print_exc()

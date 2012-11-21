@@ -26,76 +26,78 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-import httplib, sys, re
+import httplib, sys
 from lxml import etree
 import os,re
+import traceback
 
-hostport  = 'localhost:8080'
-try:
-	if os.environ['hostport']:
-		hostport = os.environ['hostport']
-except:
-	pass
+DEBUG = os.getenv("DEBUG")
+if DEBUG: DEBUG = int(DEBUG)
+
+hostport = 'localhost:8080'
+if os.getenv("hostport"):
+        hostport = os.getenv("hostport")
+
+contextpath = '/solr'
+if os.getenv("contextpath"):
+        contextpath = os.getenv("contextpath")
 
 cores = ['__SINGLE_CORE__']
+if os.getenv('cores'):
+        cores = re.split(r'\s+', os.getenv('cores'))
+p = re.compile( 'solr_\w+(?<=_)' )
+filename = os.path.basename(__file__)
+core = p.sub('', filename)
+if core and core != filename:
+       	cores = [ core ]
+
 try:
-	if os.environ['cores']:
-		cores = re.split(r'\s+', os.environ['cores'])
-	p = re.compile( 'solr_\w+(?<=_)' )
-	filename = os.path.basename(__file__)
-	core = p.sub('', filename)
-	if core != filename:
-        	cores = [ core ]
+	if sys.argv[-1] == 'config':
+		print "graph_title Solr Cache / Query Result Cache (%s)" % contextpath
+		print "graph_args -l 0"
+		print "graph_category search"
+		print "graph_vlabel size"
+		for core in cores:
+	                if core == '__SINGLE_CORE__':
+	                        core = ''
+			print "%s_size.label %s Size"% (core,core)
+			print "%s_size.draw AREA"% core
+			print "%s_lookups.label %s Lookups"% (core,core)
+			print "%s_lookups.draw STACK"% core
+			print "%s_hits.label %s Hits"% (core,core)
+			print "%s_hits.draw STACK"% core
+			print "%s_inserts.label %s Inserts"% (core,core)
+			print "%s_inserts.draw STACK"% core
+			print "%s_evictions.label %s Evictions"% (core,core)
+			print "%s_evictions.draw STACK"% core
+	else:
+		conn = httplib.HTTPConnection( hostport )
+		for core in cores:
+	                if core == '__SINGLE_CORE__':
+	                        core = coredir = '' 
+	                else:
+	                	coredir = "/%s" % core
+	                path = "%s%s/admin/mbeans?stats=true" % (contextpath, coredir)
+			conn.request("GET", path)
+			res = conn.getresponse()
+	
+			if res.status == 200:
+				data = res.read()
+	                        if DEBUG >= 3: print data
+
+				root = etree.fromstring(data)
+
+				xmlpash  = '/response'
+				xmlpash += '/lst[@name="solr-mbeans"]'
+				xmlpash += '/lst[@name="CACHE"]'
+				xmlpash += '/lst[@name="queryResultCache"]'
+				xmlpash += '/lst[@name="stats"]'
+
+				stats = root.xpath(xmlpash)
+			
+				for stat in stats[0]:
+			     	    if stat.get('name') in ['lookups', 'hits', 'inserts', 'evictions', 'size']:
+				        print "%s_%s.value %s" % (core, stat.get('name'), stat.text)
+		
 except:
-	pass
-
-if sys.argv[-1] == 'config':
-	print "graph_title Solr Cache / Query Result Cache"
-	print "graph_args -l 0"
-	print "graph_category search"
-	print "graph_vlabel size"
-	for core in cores:
-                if core == '__SINGLE_CORE__':
-                        core = ''
-		print "%s_size.label %s Size"% (core,core)
-		print "%s_size.draw AREA"% core
-		print "%s_lookups.label %s Lookups"% (core,core)
-		print "%s_lookups.draw STACK"% core
-		print "%s_hits.label %s Hits"% (core,core)
-		print "%s_hits.draw STACK"% core
-		print "%s_inserts.label %s Inserts"% (core,core)
-		print "%s_inserts.draw STACK"% core
-		print "%s_evictions.label %s Evictions"% (core,core)
-		print "%s_evictions.draw STACK"% core
-
-else:
-	conn = httplib.HTTPConnection( hostport )
-	for core in cores:
-	        if core == '__SINGLE_CORE__':
-                        core = coredir = '' 
-                else:
-                	coredir = "/%s" % core
-                path = "/solr%s/admin/stats.jsp" % coredir
-		conn.request("GET", path)
-		res = conn.getresponse()
-		
-		if res.status == 200:
-			data = res.read()
-		
-			root = etree.fromstring(data)
-			elements = root.xpath('/solr/solr-info/CACHE')
-		
-			stat_list = []
-		
-			for entry in elements[0].xpath('entry'):
-				if entry[0].text.strip() == 'queryResultCache':
-					description = entry.xpath('description')
-					match = re.findall(r'maxSize=([0-9]+)', description[0].text.strip())
-					maxsize = match[0]
-					stats = entry.xpath('stats')
-					for stat in stats[0]:
-						if stat.get('name') in ['lookups', 'hits', 'inserts', 'evictions', 'size']:
-							stat_list.append("%s_%s.value %s" % (core, stat.get('name'), stat.text.strip()))
-		
-			for i in stat_list:
-				print i
+	if DEBUG: traceback.print_exc()
