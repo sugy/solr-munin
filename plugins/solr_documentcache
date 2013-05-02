@@ -49,11 +49,18 @@ if os.getenv("contextpath"):
 cores = ['__SINGLE_CORE__']
 if os.getenv('cores'):
         cores = re.split(r'\s+', os.getenv('cores'))
-p = re.compile( 'solr_\w+(?<=_)' )
+
+delimiter='_'
+if os.getenv('delimiter'):
+        delimiter =  os.getenv("delimiter")
+if re.match(r'\w', delimiter) :
+        delimiter = '(?<='+delimiter+')'
+p = re.compile( 'solr_\w+'+delimiter )
 filename = os.path.basename(__file__)
 core = p.sub('', filename)
 if core and core != filename:
        	cores = [ core ]
+if DEBUG >= 1: print cores
 
 try:
 	if sys.argv[-1] == 'config':
